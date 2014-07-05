@@ -1,0 +1,118 @@
+#!/sbin/runscript
+# Copyright 1999-2014 Gentoo Foundation
+# Distributed under the terms of the GNU General Public License v2
+# $Header: $
+
+
+extra_commands="debug shell"
+
+
+depend() {
+        need net docker
+}
+
+
+_docker_opts() {
+	local _env _opt=$1 _var="docker_${2}"
+
+	for var in ${!_var}; do
+		_env="${_env} ${_opt} ${var}"
+	done
+
+	echo ${_env}
+}
+
+
+_init() {
+	if [ ! -d /run/dockerized ]; then
+		mkdir /run/dockerized
+	fi
+}
+
+
+_cid() {
+	if [ -e "/run/dockerized/${SVCNAME}" ]; then
+		cat "/run/dockerized/${SVCNAME}"
+	fi
+}
+
+
+_checkrunning() {
+	local cid=$(_cid)
+
+	if [ -n "${cid}" ]; then
+		if docker ps | grep "${cid}" >/dev/null; then
+			ewarn ""
+			ewarn "Docker reports ${SVCNAME} as running."
+			ewarn "Please shut it down using"
+			ewarn "    docker stop ${SVCNAME} && docker rm ${SVCNAME}"
+			
+			return 1
+		fi
+	fi
+}
+
+
+start() {
+	_init && _checkrunning || return 1
+
+	ebegin "Starting dockerized ${SVCNAME}"
+
+	docker run --name="${SVCNAME}" -i -d \
+		$(_docker_opts -e env) \
+		$(_docker_opts -p ports) \
+		$(_docker_opts -v volumes) \
+		"${docker_image}" > "/run/dockerized/${SVCNAME}"
+	
+	eend $?
+}
+
+
+debug() {
+	_init && _checkrunning || return 1
+
+	echo docker run --name="${SVCNAME}" -i -t --rm \
+		$(_docker_opts -e env) \
+		$(_docker_opts -p ports) \
+		$(_docker_opts -v volumes) \
+		"${docker_image}"
+
+	docker run --name="${SVCNAME}" -i -t --rm \
+		$(_docker_opts -e env) \
+		$(_docker_opts -p ports) \
+		$(_docker_opts -v volumes) \
+		"${docker_image}"
+	
+	eend $?
+}
+
+
+shell() {
+	_init && _checkrunning || return 1
+
+	docker run --name="${SVCNAME}" -i -t --rm \
+		$(_docker_opts -e env) \
+		$(_docker_opts -p ports) \
+		$(_docker_opts -v volumes) \
+		"${docker_image}" /bin/bash -l
+	
+	eend $?
+}
+
+
+stop() {
+	ebegin "Stopping dockerized ${SVCNAME}"
+
+	local cid=$(_cid)
+
+	if [ -n "${cid}" ]; then
+		docker stop ${cid} >/dev/null && docker rm ${cid} >/dev/null
+	else
+		ewarn ""
+		ewarn "${SVCNAME} does not seem to be running."
+		ewarn ""
+		return 1
+	fi
+
+	eend $?
+}
