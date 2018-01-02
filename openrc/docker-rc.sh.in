@@ -1,0 +1,65 @@
+#!/sbin/openrc-run
+# Copyright 1999-2017 Gentoo Foundation
+# Released under the 2-clause BSD license.
+
+extra_commands="debug enter shell upgrade"
+
+#  Set the INIT to be openrc if this file is called directly
+: ${INIT:=openrc}
+
+LIBEXECDIR="@LIBEXECDIR@"
+RC_CONTAINER="${RC_SVCNAME#docker.}"
+
+if [ -f "$LIBEXECDIR/functions.sh" ]; then
+	. "$LIBEXECDIR/functions.sh"
+else
+	echo "$LIBEXECDIR/functions.sh missing. Exiting"
+	exit 1
+fi
+
+
+depend() {
+	need net docker
+}
+
+
+start() {
+	_docker_init && _docker_check_running || return 1
+
+	ebegin "Starting dockerized ${RC_CONTAINER}"
+
+	_docker_run "-i -d" "${docker_command}" > "/run/dockerized/${RC_CONTAINER}"
+
+	eend $?
+}
+
+
+debug() {
+	_docker_init && _docker_check_running || return 1
+
+	_docker_run "-i -t --rm"
+}
+
+
+shell() {
+	_docker_init && _docker_check_running || return 1
+
+	_docker_run "-i -t --rm" "/bin/bash -l"
+}
+
+
+upgrade() {
+	_docker_init && _docker_check_running || return 1
+
+	_docker_run "-i -t --rm" "upgrade"
+}
+
+
+enter() {
+	_docker_enter
+}
+
+stop() {
+	ebegin "Stopping dockerized ${RC_CONTAINER}"
+	_docker_stop
+}
