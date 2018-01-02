@@ -1,9 +1,9 @@
-#!/sbin/runscript
-# Copyright 1999-2014 Gentoo Foundation
+#!/sbin/openrc-run
+# Copyright 1999-2017 Gentoo Foundation
 # Distributed under the terms of the GNU General Public License v2
 # $Header: $
 
-extra_commands="debug enter shell"
+extra_commands="debug enter shell upgrade"
 
 docker_bin=${docker_bin:-/usr/bin/docker}
 
@@ -14,7 +14,7 @@ depend() {
 
 
 _docker_opts() {
-	local _env _opt=$1 _var="docker_${2}"
+	local _env="" _opt=$1 _var="docker_${2}"
 
 	for var in ${!_var}; do
 		_env="${_env} ${_opt} ${var}"
@@ -55,7 +55,14 @@ _checkrunning() {
 
 
 _docker_run() {
-	local opts=$1 cmd=$2 extraopts="" cid status docker_stderr
+	local opts=$1
+	local cmd=$2
+	local extraopts=""
+	local cid
+	local status
+	local docker_stderr
+	local net
+	local net_extraopts=""
 
 	if [ "${docker_net}" == "public" ]; then
 		if [ -z "${docker_net_gw}" ]; then
@@ -79,8 +86,12 @@ _docker_run() {
 		extraopts="${extraopts} -h ${docker_hostname}"
 	fi
 
+	if [ -n "${docker_privileged}" ]; then
+		extraopts="${extraopts} --privileged"
+	fi
+
 	echo "${docker_bin}" run --name="${SVCNAME}" $opts \
-			$(_docker_opts -e env) \
+			$(_docker_opts --env env) \
 			$(_docker_opts -p ports) \
 			$(_docker_opts -v volumes) \
 			${extraopts} \
@@ -89,7 +100,7 @@ _docker_run() {
 	| logger -i -t "/etc/init.d/${SVCNAME}" -p daemon.info
 
 	docker_stderr=$("${docker_bin}" run --name="${SVCNAME}" $opts \
-			 $(_docker_opts -e env) \
+			 $(_docker_opts --env env) \
 			 $(_docker_opts -p ports) \
 			 $(_docker_opts -v volumes) \
 			 ${extraopts} \
@@ -111,6 +122,16 @@ _docker_run() {
 		/usr/sbin/pipework ${docker_net_bridge} ${docker_net_addr}
 	fi
 
+	if [ -n "${docker_networks}" ]; then
+		if [ -n "${docker_dns_alias}" ]; then
+			net_extraopts="${net_extraopts} --alias ${docker_dns_alias}"
+		fi
+
+		for net in ${docker_networks}; do
+			docker network connect ${net_extraopts} "${net}" "${SVCNAME}"
+		done
+	fi
+
 	cid=$(docker inspect --format {{.Id}} ${SVCNAME})
 
 	if [ -z "${cid}" ]; then
@@ -127,7 +148,7 @@ start() {
 
 	ebegin "Starting dockerized ${SVCNAME}"
 
-	_docker_run "-i -d" > "/run/dockerized/${SVCNAME}"
+	_docker_run "-i -d" "${docker_command}" > "/run/dockerized/${SVCNAME}"
 
 	eend $?
 }
@@ -144,6 +165,13 @@ shell() {
 	_init && _checkrunning || return 1
 
 	_docker_run "-i -t --rm" "/bin/bash -l"
+}
+
+
+upgrade() {
+	_init && _checkrunning || return 1
+
+	_docker_run "-i -t --rm" "upgrade"
 }
 
 
