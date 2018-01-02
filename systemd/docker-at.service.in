@@ -1,0 +1,14 @@
+[Unit]
+Description=Docker Container Runner Service
+Requires=docker.service
+After=network.target docker.service
+
+[Service]
+Type=oneshot
+ExecStart=@LIBEXECDIR@/systemd-wrapper.sh -c %I start
+ExecStop=@LIBEXECDIR@/systemd-wrapper.sh -c %I stop
+RuntimeDirectory=/run/dockerized
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
