@@ -1,6 +1,8 @@
-# Common docker-rc functions.
+# Common container-rc functions.
 
 docker_bin=${docker_bin:-/usr/bin/docker}
+rkt_bin=${rkt_bin:-/usr/bin/rkt}
+
 
 if [ x$RC_GOT_FUNCTIONS = xyes -o -n "$(command -v ebegin 2>/dev/null)" ]; then
     :
@@ -16,13 +18,13 @@ fi
 
 
 _docker_opts() {
-	local _env="" _opt=$1 _var="docker_${2}"
+	local _opts="" _opt=$1 _var="docker_${2}"
 
 	for var in ${!_var}; do
-		_env="${_env} ${_opt} ${var}"
+		_opts="${_opts} ${_opt}=${var}"
 	done
 
-	echo ${_env}
+	echo ${_opts}
 }
 
 
@@ -180,4 +182,71 @@ _docker_stop() {
 	fi
 
 	eend $?
+}
+
+
+_rkt_mounts() {
+	local opts="" var="docker_${1}" volname src tgt
+
+	for mount in ${!var}; do
+        src="${mount%:*}"
+        tgt="${mount#*:}"
+        volname="${tgt#/}"
+        volname="${volname%/}"
+        volname="${volname////-}"
+        opts="${opts} --volume ${volname},kind=host,source=${src}"
+        opts="${opts} --mount volume=${volname},target=${tgt}"
+    done
+
+    echo ${opts}
+}
+
+
+_rkt_ports() {
+	local opts="" var="docker_${1}"
+
+	for port in ${!var}; do
+        hostport="${port%:*}"
+        ctrport="${port##*:}"
+        host="${hostport%:*}"
+        hostport="${hostport#*:}"
+        if [ -n "${host}" ]; then
+            portspec="${ctrport}-tcp:${host}:${hostport}"
+        else
+            portspec="${ctrport}-tcp:${hostport}"
+        fi
+        opts="${opts} --port=${portspec}"
+    done
+
+    echo ${opts}
+}
+
+
+_rkt_run() {
+	local opts=$1
+	local cmd=$2
+	local extraopts=""
+
+	if [ -n "${docker_hostname}" ]; then
+		extraopts="${extraopts} --hostname ${docker_hostname}"
+	fi
+
+    set -- "${rkt_bin}" fetch \
+        --insecure-options=image --pull-policy=new "docker://${docker_image}"
+    echo "$@"
+    "$@" || return 1
+
+    set -- "${rkt_bin}" run \
+            --insecure-options=image \
+            "docker://${docker_image}" \
+            --name="${RC_CONTAINER}" $opts \
+			$(_docker_opts --set-env env) \
+			$(_docker_opts --net networks) \
+			$(_rkt_ports ports) \
+			$(_rkt_mounts volumes) \
+			${extraopts} \
+            -- $cmd
+
+    echo "$@"
+    exec "$@"
 }

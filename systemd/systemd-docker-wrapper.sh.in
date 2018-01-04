@@ -1,0 +1,59 @@
+#!/bin/sh
+
+CONFDIR="@CONFDIR@"
+LIBEXECDIR="@LIBEXECDIR@"
+INIT=systemd
+
+if [ -f "$LIBEXECDIR/functions.sh" ]; then
+	. "$LIBEXECDIR/functions.sh"
+else
+	echo "$LIBEXECDIR/functions.sh missing. Exiting"
+	exit 1
+fi
+
+
+usage() {
+	echo "container-rc systemd wrapper for Docker"
+	echo "Usage:"
+	echo "  systemd-docker-wrapper.sh -c <container> <command>"
+	echo "  where command is start|stop"
+}
+
+die() {
+	echo "$@"
+	exit 1
+}
+
+
+while getopts "c:" opt; do
+	case $opt in
+		c)
+			RC_CONTAINER=$OPTARG;;
+	esac
+done
+shift $((OPTIND -1))
+
+[ -z "$RC_CONTAINER" ] && die "Missing -c COINTAINER argument."
+
+RC_SVCPREFIX="docker"
+RC_SVCNAME="$RC_SVCPREFIX"."$RC_CONTAINER"
+SVCDIR="/run/dockerized"
+
+# Source the config file
+if [ -f "$CONFDIR/$RC_SVCNAME" ]; then
+	. "$CONFDIR/$RC_SVCNAME"
+fi
+
+rc=0
+case $1 in
+	start)
+		_docker_init && _docker_check_running || exit 1
+		_docker_run "-i -d" > "/run/dockerized/${RC_CONTAINER}"
+		rc=$?;;
+	stop)
+		_docker_stop
+		rc=$?;;
+	*)
+		die "Unrecognised command $1";;
+esac
+exit $rc

@@ -13,10 +13,10 @@ fi
 
 
 usage() {
-	echo "docker-rc systemd wrapper"
+	echo "container-rc systemd wrapper for rkt"
 	echo "Usage:"
-	echo "  systemd-wrapper.sh -c <container> <command>"
-	echo "  where command is start|stop"
+	echo "  systemd-rkt-wrapper.sh -c <container> <command>"
+	echo "  where command is start"
 }
 
 die() {
@@ -35,9 +35,8 @@ shift $((OPTIND -1))
 
 [ -z "$RC_CONTAINER" ] && die "Missing -c COINTAINER argument."
 
-RC_SVCPREFIX="docker"
+RC_SVCPREFIX="container"
 RC_SVCNAME="$RC_SVCPREFIX"."$RC_CONTAINER"
-SVCDIR="/run/dockerized"
 
 # Source the config file
 if [ -f "$CONFDIR/$RC_SVCNAME" ]; then
@@ -47,11 +46,7 @@ fi
 rc=0
 case $1 in
 	start)
-		_docker_init && _docker_check_running || exit 1
-		_docker_run "-i -d" > "/run/dockerized/${RC_CONTAINER}"
-		rc=$?;;
-	stop)
-		_docker_stop
+		_rkt_run
 		rc=$?;;
 	*)
 		die "Unrecognised command $1";;

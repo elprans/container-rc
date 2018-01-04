@@ -1,0 +1,15 @@
+[Unit]
+Description=%I container
+Requires=network-online.target
+After=network-online.target
+
+[Service]
+Slice=machine.slice
+Delegate=true
+ExecStart=@LIBEXECDIR@/systemd-rkt-wrapper.sh -c %i start
+ExecStopPost=@BINDIR@/rkt gc --mark-only
+KillMode=mixed
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

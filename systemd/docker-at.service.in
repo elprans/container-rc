@@ -5,9 +5,8 @@ After=network.target docker.service
 
 [Service]
 Type=oneshot
-ExecStart=@LIBEXECDIR@/systemd-wrapper.sh -c %i start
-ExecStop=@LIBEXECDIR@/systemd-wrapper.sh -c %i stop
-RuntimeDirectory=/run/dockerized
+ExecStart=@LIBEXECDIR@/systemd-docker-wrapper.sh -c %i start
+ExecStop=@LIBEXECDIR@/systemd-docker-wrapper.sh -c %i stop
 RemainAfterExit=yes
 
 [Install]
