@@ -44,7 +44,7 @@ _docker_check_running() {
 	local cid=$(_docker_cid)
 
 	if [ -n "${cid}" ]; then
-		if "${docker_bin}" ps | grep "${cid}" >/dev/null; then
+		if [ -n "$(${docker_bin} ps -aq -f status=running -f name=^/${cid}$)" ]; then
 			ewarn ""
 			ewarn "Docker reports ${RC_CONTAINER} as running."
 			ewarn "Please shut it down using"
@@ -92,19 +92,25 @@ _docker_run() {
 		extraopts="${extraopts} --privileged"
 	fi
 
+	if [ -n "$("${docker_bin}" ps -aq -f name=^/${RC_CONTAINER}$)" ]; then
+		# cleanup
+		"${docker_bin}" rm -f "${RC_CONTAINER}"
+	fi
+
 	echo "${docker_bin}" run --name="${RC_CONTAINER}" $opts \
 			$(_docker_opts --env env) \
 			$(_docker_opts -p ports) \
 			$(_docker_opts -v volumes) \
+			$(_docker_opts --dns dns) \
 			${extraopts} \
 			"${docker_image}" \
-			$cmd \
-	| logger -i -t "/etc/init.d/${RC_CONTAINER}" -p daemon.info
+			$cmd | logger -i -t "docker@${RC_CONTAINER}" -p daemon.info
 
 	docker_stderr=$("${docker_bin}" run --name="${RC_CONTAINER}" $opts \
 			 $(_docker_opts --env env) \
 			 $(_docker_opts -p ports) \
 			 $(_docker_opts -v volumes) \
+			 $(_docker_opts --dns dns) \
 			 ${extraopts} \
 			 "${docker_image}" \
 			 $cmd 2>&1 1>/dev/null)
@@ -112,7 +118,7 @@ _docker_run() {
 	status=$?
 
 	if [ "$status" -ne "0" ]; then
-		echo $docker_stderr | logger -is -t "/etc/init.d/${RC_CONTAINER}" -p daemon.err
+		echo $docker_stderr | logger -is -t "docker@${RC_CONTAINER}" -p daemon.err
 
 		"${docker_bin}" stop "${RC_CONTAINER}" 2>/dev/null
 		"${docker_bin}" rm "${RC_CONTAINER}" 2>/dev/null
